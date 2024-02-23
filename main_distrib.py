@@ -28,9 +28,9 @@ from pc_mesh import *
 from pc_image import *
 
 
-def dist_path(relative_path):
-    base_path = sys._MEIPASS
-    return os.path.join(base_path, relative_path)
+# def dist_path(relative_path):
+#     base_path = sys._MEIPASS
+#     return os.path.join(base_path, relative_path)
 
 ####Help texts####
 overview_txt="""Topography Visualisation Toolbox was originally developed using landscape archaeology methods to highlight the detail of carved rock art. The toolbox includes two visualisation tools that improve the visualisation of surfaces, particularly in cultural heritage applications, and a deep learning tool to highlight motifs in carved rock art. 
@@ -68,27 +68,15 @@ class TvtApp(ctk.CTk, tk.Tk):
         ctk.set_appearance_mode('Dark')
         ctk.set_default_color_theme('custom_theme.json')
 
-        screenwidth = self.winfo_screenwidth()
-        screenheight = self.winfo_screenheight()
-        scaling=self._get_window_scaling()
-        self.geometry(f'{screenwidth/2}x{screenheight/2}+{((screenwidth/2)-(screenwidth/1.5))*scaling}+{((screenheight/2)-(screenheight/2))*scaling}')
+        screenwidth = 1000
+        screenheight = 800
+        # scaling=self._get_window_scaling()
+        self.geometry('1000x800')
+        self.geometry(f'{screenwidth/2}x{screenheight/2}+{((screenwidth/2)-(screenwidth/1.5))}+{((screenheight/2)-(screenheight/2))}')
 
         self.lift()
         self.attributes('-transparentcolor', 'pink')
         ctk.FontManager.load_font('fonts/BarlowSemiCondensed-Medium.ttf')
-
-
-#Resize the images as window size changes
-        def resize(event):
-            self.new_height = int(event.height/scaling)
-            self.new_width = int(event.width/scaling)
-            self.correction=(self.new_width,self.new_height)
-            corrected_header=ImageOps.contain(self.header_img_light,(self.correction))
-
-            self.new_header = ctk.CTkImage(light_image=self.header_img_light, dark_image=self.header_img_dark, size=(corrected_header.width,corrected_header.height))
-            self.sidebar_img.configure(image=self.new_header)
-            self.update_idletasks()
-            self.summary.configure(wraplength=(self.summary.winfo_width()/scaling))
 
 
 #Toggle between light and dark mode
@@ -178,28 +166,28 @@ class TvtApp(ctk.CTk, tk.Tk):
         self.topview.tab('Overview').columnconfigure(0, weight=1)
         self.topview.tab('Overview').rowconfigure((0,1,2), weight=1)
 
-        self.summary = ctk.CTkLabel(self.topview.tab('Overview'), justify='left', wraplength=(screenwidth-300),
+        self.summary = ctk.CTkLabel(self.topview.tab('Overview'), justify='left', wraplength=750,
                                     text=overview_txt,font=('BarlowSemiCondensed-Medium',28))
         self.summary.grid(row=1, column=0, pady=(5, 0), ipadx=150, ipady=10, sticky='ns')
 
         self.update()
-        self.header_img_dark = Image.open(('header_landscape.png'))
-        self.header_img_light = Image.open(('header_landscape_light.png'))
-        self.img_width = int(self.summary.winfo_width())
-        self.img_height =int((screenheight)*0.75)
-        self.header = ctk.CTkImage(light_image=self.header_img_light,
-                                   dark_image=self.header_img_dark,
-                                   size=(self.img_width,self.img_height))
+        # self.header_img_dark = Image.open(('header_landscape.png'))
+        # self.header_img_light = Image.open(('header_landscape_light.png'))
+        # self.img_width = int(self.summary.winfo_width())
+        # self.img_height =int((screenheight)*0.75)
+        # self.header = ctk.CTkImage(light_image=self.header_img_light,
+        #                            dark_image=self.header_img_dark,
+        #                            size=(self.img_width,self.img_height))
 
-        self.sidebar_img = ctk.CTkLabel(self.topview.tab('Overview'), text=None, image=self.header, corner_radius=0, fg_color=self.frame)
-        self.sidebar_img.grid(row=0, column=0,sticky='nsew', pady=(0,5))
-        self.sidebar_img.bind('<Configure>', resize)
+        # self.sidebar_img = ctk.CTkLabel(self.topview.tab('Overview'), text=None, image=self.header, corner_radius=0, fg_color=self.frame)
+        # self.sidebar_img.grid(row=0, column=0,sticky='nsew', pady=(0,5))
+        # self.sidebar_img.bind('<Configure>', resize)
 
 
     # Topo Vis Tab
         self.topview.add('Topo Vis')
         self.topview.tab('Topo Vis').rowconfigure(0, weight=1)
-        self.topview.tab('Topo Vis').columnconfigure((0,1,2,3,4), weight=1)
+        self.topview.tab('Topo Vis').columnconfigure((0), weight=1)
 
         def run_tvt():
             self.tv_run_button.configure(image=self.wait, text=None)
@@ -216,15 +204,13 @@ class TvtApp(ctk.CTk, tk.Tk):
             flip_mesh = bool(self.invert_spinbox.get())
             update_resolution = bool(self.updateres_spinbox.get())
             scale_multiplier = float(self.res_multiplier.get()) if self.updateres_spinbox.get() > 0 else 1.0
-            progress_text = self.tv_run_text
             array = bool(self.outarray_spinbox.get())
             export_rgb = bool(self.rgb_spinbox.get())
             export_grey = bool(self.grey_spinbox.get())
-            img_format = self.img_ext_entry.get()
             transparency=bool(self.transparency_spinbox.get())
-            
+            img_format = self.img_ext_entry.get()
 
-            image_tab = self.tvresultsview
+            # image_tab = self.tvresultsview
 
             files = []
             for dp, dn, filenames in os.walk(data_path):
@@ -233,17 +219,28 @@ class TvtApp(ctk.CTk, tk.Tk):
                         files.append((' '.join(file.split('.')[0].split(' ')), os.path.join(dp, file),
                                       ''.join(dp.replace(data_path, save_path))))
                                
-            self.tvresultsview.grid(column=1,row=0,sticky='nsew', padx=(10,0))
+            # self.tvresultsview.grid(column=1,row=0,sticky='nsew', padx=(10,0))
             # self.tvresultsview.rowconfigure((1,2), weight=1)
             # self.tvresultsview.columnconfigure((1,2), weight=1)
 
-            topovis.start_tv(
+
+            # topovis.start_tv(
+            #     data_path, save_path, meta_data_path, visualize_steps, downsample_mesh, voxel_multiplier, fill_holes,
+            #     depth_size, flip_mesh, update_resolution, scale_multiplier, array, 
+            #     files=files, export_rgb=export_rgb,export_grey=export_grey,transparency=transparency,img_format=img_format)
+           
+            try:
+                topovis.start_tv(
                 data_path, save_path, meta_data_path, visualize_steps, downsample_mesh, voxel_multiplier, fill_holes,
-                depth_size, flip_mesh, update_resolution, scale_multiplier, progress_text, image_tab, array, files=files, export_rgb=export_rgb,export_grey=export_grey,img_format=img_format,transparency=transparency)
+                depth_size, flip_mesh, update_resolution, scale_multiplier, array, 
+                files=files, export_rgb=export_rgb,export_grey=export_grey,transparency=transparency,img_type=img_format)
+            except MemoryError as error:
+                    topovis.log_exception(error, False)
+            except Exception as exception:
+                    topovis.log_exception(exception, True)
+            # self.tv_clear_tabs.grid(row=4, column=0, sticky='ew', padx=2, pady=2)
 
-            self.tv_clear_tabs.grid(row=4, column=0, sticky='ew', padx=2, pady=2)
-
-            self.tv_run_button.configure(image=self.play, text=None, command=lambda:Thread.stop())
+            self.tv_run_button.configure(image=self.play, text=None)
             self.tv_run_button.update()
 
             self.tv_run_text.configure(text='')
@@ -252,7 +249,7 @@ class TvtApp(ctk.CTk, tk.Tk):
     #Set parameters frame
         self.tv_inputarea = ctk.CTkScrollableFrame(self.topview.tab('Topo Vis'), corner_radius=10)
         self.tv_inputarea.grid(row=0,column=0,sticky='nsew')
-        self.tv_inputarea.rowconfigure((0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18), weight=5)
+        self.tv_inputarea.rowconfigure((0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22), weight=5)
         self.tv_inputarea.columnconfigure((1,2,3,4), weight=1)
 
     # Select input
@@ -401,17 +398,14 @@ class TvtApp(ctk.CTk, tk.Tk):
         tab_name = '{}:{}...'.format(count, file.replace('.stl', '').replace('.obj', '').replace('.ply', ''))
         self.topovis_tab_list.append(tab_name)
 
-
-
-
 if __name__ == '__main__':
 
-    try:
-       import pyi_splash
+    # try:
+    #    import pyi_splash
 
-       pyi_splash.close()
-    except:
-       pass
+    #    pyi_splash.close()
+    # except:
+    #    pass
 
     app = TvtApp()
     app.mainloop()
