@@ -1,1 +1,3 @@
 In development...
+
+The base files used in the packaged (via pyinstaller) version of the basic TVT GUI.  The basic version of TVT includes a topographic visualisation tool to enhance and generate images of small topographic variations in 3d mesh files.  The tool, originally called 'ratopoviz', is still undergoing recent improvements in order to make it better suited to use a wide variety of content outside of petroglyphs.  This work is still on going in early 2024, after which additional tools will be added for the full version of TVT.
