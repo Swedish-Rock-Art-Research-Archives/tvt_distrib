@@ -1,9 +1,25 @@
-from sklearnex import patch_sklearn
-patch_sklearn()
+# ##solution from https://github.com/pyinstaller/pyinstaller/issues/8000#issuecomment-1759284943 to work around missing directories when packaging with pyinstaller
+
+# def _patch_add_dll_directory():
+#     import os
+#     import sys
+#     if getattr(sys, 'frozen', False):
+#         _orig_add_dll_directory = os.add_dll_directory
+#         def _add_dll_directory(*args, **kwargs):
+#             try:
+#                 _orig_add_dll_directory(*args, **kwargs)
+#             except FileNotFoundError:
+#                 pass
+#         os.add_dll_directory = _add_dll_directory
+
+# _patch_add_dll_directory()
+# del _patch_add_dll_directory
+
+
+# from sklearnex import patch_sklearn
+# patch_sklearn()
 
 import itertools
-
-
 
 import numpy as np
 import scipy as sp
@@ -24,8 +40,6 @@ from sklearn.cluster import DBSCAN, OPTICS
 from itertools import repeat, product
 
 import tkinter as tk
-
-
 
 if __name__ == '__main__':
 	mp.freeze_support()
@@ -186,25 +200,14 @@ def check_noise_worker(coords):
 
 		noise_cluster_ratio = 0.2
 		
-		if g_res>1:
-			model = DBSCAN(
-				eps=3.0*g_res,
-				min_samples=10,
-				metric='euclidean',
-				algorithm='kd_tree',
-				leaf_size=30,
-				n_jobs=1
-			)
-
-		else:
-			model = OPTICS(
+		model = DBSCAN(
+			eps=3.0*g_res,
 			min_samples=10,
 			metric='euclidean',
-			algorithm='ball_tree',
+			algorithm='kd_tree',
 			leaf_size=30,
-			n_jobs=-1
+			n_jobs=1
 		)
-			
 		model.fit(g_comp[mask, :])
 
 		labels, counts = np.unique(model.labels_, return_counts=True)
@@ -270,51 +273,44 @@ def noise_removal(pcd, resolution, visualize=False):
 
 	grid_coords = np.array(list(itertools.product(range(0, grid_x.shape[0]-1), range(0, grid_y.shape[0]-1))), dtype=object)
 
-	print('starting pool')
+	
 	cpu_count = mp.cpu_count()
 	pool = mp.Pool(
-		processes=int(cpu_count/3)-1,
+		processes=cpu_count,
 		initializer=check_noise_init,
 		initargs=(comp, grid_x, grid_y, resolution)
 	)
 
-	print('map pool')
 	g_density_noise_indices = pool.map(check_noise_worker, grid_coords)
 	g_density_noise_indices = list(itertools.chain.from_iterable(g_density_noise_indices))
 	g_density_non_noise_indices = np.delete(np.arange(points.shape[0]), g_density_noise_indices)
 	pool.close()
 	pool.join()
-	print('pool close')
 
 	pcd_noise_g_density = pcd.select_by_index(g_density_noise_indices)   #changed to select_by_index
 	pcd_inlier = pcd.select_by_index(g_density_noise_indices, invert=True) #changed to select_by_index
 
 
 	noise_cluster_ratio = 0
-
-	print(resolution)
-	if resolution>1:
 	
-		model = DBSCAN(
-			eps=3.0 * resolution,
-			min_samples=10,
-			metric='euclidean',
-			algorithm='ball_tree',
-			leaf_size=30,
-			n_jobs=-1
-		)
+	model = DBSCAN(
+		eps=3.0 * resolution,
+		min_samples=10,
+		metric='euclidean',
+		algorithm='ball_tree',
+		leaf_size=30,
+		n_jobs=-1
+	)
 
-	#'''
-	else:
-		model = OPTICS(
-			min_samples=10,
-			metric='euclidean',
-			algorithm='ball_tree',
-			leaf_size=30,
-			n_jobs=-1
-		)
-	#'''
-	print(model)
+	'''
+	model = OPTICS(
+		min_samples=10,
+		metric='euclidean',
+		algorithm='ball_tree',
+		leaf_size=30,
+		n_jobs=-1
+	)
+	'''
 	model.fit(np.asarray(pcd_inlier.points))
 	labels, counts = np.unique(model.labels_, return_counts=True)
 

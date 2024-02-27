@@ -39,9 +39,9 @@ class topovis:
                 print(output)
 
                 exc_type, exc_value, exc_traceback = sys.exc_info()
-                traceback.print_tb(exc_traceback)
+                #traceback.print_tb(exc_traceback)
 
-                # tk.messagebox.showinfo(title='Topography Visualisation Toolbox: '+exc_type, message=output)
+                tk.messagebox.showinfo(title='Topography Visualisation Toolbox: {}'.format(exc_type), message=output)
 
 
         def ms_output(seconds):
@@ -58,14 +58,18 @@ class topovis:
                         if array:
                                 os.makedirs(path + '/arrays')
 
-        def start_tv(data_path, save_path, meta_data_path, visualize_steps, downsample_mesh, voxel_multiplier, fill_holes, depth_size, flip_mesh, update_resolution, scale_multiplier, array, files, export_rgb, export_grey, transparency, img_type):
+        def start_tv(data_path, save_path, meta_data_path, visualize_steps, downsample_mesh, voxel_multiplier, fill_holes, depth_size, flip_mesh, update_resolution, scale_multiplier, progress_text, array, files, export_rgb, export_grey, img_type, transparency):
                 total_time_start = time.time()
                 stages=['Organising input', 'Reading mesh', 'Computing normals', 'Converting mesh to point cloud', 'Removing outliers', 'Transforming point cloud', 'Creating images', 'Creating topo maps', 'Enhancing images', 'Saving images', 'Saving summary', 'Processing finished']        
 
 
                 stage=stages[0]
                 #stage_text = '{}...'.format(stages[0])
-                print(stage)
+                
+
+                
+                progress_text.configure(text='{}...'.format(stage))
+                progress_text.update()
 
                 
                                         
@@ -119,7 +123,10 @@ class topovis:
                         ########################################################
 
                         stage=stages[1]
-                        print(stage)
+                        #stage_text='{}: {}...'.format(os.path.splitext(file)[0], stages[1])
+                        
+                        progress_text.configure(text='{}: {}...'.format(scan_id, stage))
+                        progress_text.update()
 
                         time_start = time.time()
 
@@ -133,7 +140,8 @@ class topovis:
                                 visualize=visualize_steps)
 
                         stage=stages[2]
-                        print(stage)
+                        progress_text.configure(text='{}: {}...'.format(scan_id, stage))
+                        progress_text.update()
 
         ##                fill_holes=fill_holes
         ##
@@ -145,9 +153,8 @@ class topovis:
                         meta_data['mesh_n_vertices'].append(len(mesh.vertices))
 
                         stage=stages[3]
-                        print(stage)
-
-                        print('res = {}'.format(mesh_edge_resolution))
+                        progress_text.configure(text='{}: {}...'.format(scan_id, stage))
+                        progress_text.update()
 
                         pcd, mesh_edge_resolution = create_point_cloud(
                                 mesh,
@@ -176,7 +183,8 @@ class topovis:
                         ########################################################
 
                         stage=stages[4]
-                        print(stage)
+                        progress_text.configure(text='{}: {}...'.format(scan_id, stage))
+                        progress_text.update()
                         time_start = time.time()
 
                         pcd = noise_removal(
@@ -198,7 +206,8 @@ class topovis:
                         ########################################################
 
                         stage=stages[5]
-                        print(stage)
+                        progress_text.configure(text='{}: {}...'.format(scan_id, stage))
+                        progress_text.update()
                         time_start = time.time()
 
                         pcd, scan_stats, components, mean, rotation = transform_point_cloud(
@@ -234,7 +243,8 @@ class topovis:
                         ########################################################
                         
                         stage=stages[6]
-                        print(stage)
+                        progress_text.configure(text='{}: {}...'.format(scan_id, stage))
+                        progress_text.update()
                         time_start = time.time()
 
                         depth_map, normal_map, pc_resolution, pix_to_coords_map = generate_images(
@@ -260,7 +270,8 @@ class topovis:
                         ########################################################
 
                         stage=stages[7]
-                        print(stage)
+                        progress_text.configure(text='{}: {}...'.format(scan_id, stage))
+                        progress_text.update()
                         time_start = time.time()
 
 
@@ -290,7 +301,8 @@ class topovis:
                         ########################################################
                         
                         stage=stages[8]
-                        print(stage)
+                        progress_text.configure(text='{}: {}...'.format(scan_id, stage))
+                        progress_text.update()
                         time_start = time.time()
 
                         enhanced_topo_map_texture_level = enhance_topo_map(
@@ -327,7 +339,8 @@ class topovis:
                         ########################################################
                         
                         stage=stages[9]
-                        print(stage)
+                        progress_text.configure(text='{}: {}...'.format(scan_id, stage))
+                        progress_text.update()
                         time_start = time.time()
 
                         if export_rgb:
@@ -343,9 +356,8 @@ class topovis:
                                         {
                                                 'texture_level': enhanced_topo_map_texture_level,
                                                 'object_level': enhanced_topo_map_object_level
-                                        }, 
-                                        transparency,
-                                        img_type           
+                                        },
+                                        img_type, transparency            
                                 )
                         if export_grey:
                               grey_save_images(
@@ -361,10 +373,8 @@ class topovis:
                                                 'texture_level': enhanced_topo_map_texture_level,
                                                 'object_level': enhanced_topo_map_object_level
                                         }, 
-                                        transparency,
-                                        img_type            
+                                        img_type, transparency            
                                 )  
-                              
 
                         time_end = time.time()
 
@@ -390,13 +400,27 @@ class topovis:
 
 
                 stage=stages[10]
-                print(stage)
+                progress_text.configure(text='{}...'.format(stage))
+                progress_text.update()
                 df_meta_data = pd.DataFrame(meta_data)
                 df_meta_data.to_csv(meta_data_path, index=False)
 
                 total_time_end = time.time()
 
                 stage=stages[11]
-                print(stage)
+                progress_text.configure(text='{}...'.format(stage))
+                progress_text.update()
 
+
+
+
+##        if __name__ == '__run__':
+##
+##                try:
+##                        run()
+##                except MemoryError as error:
+##                        log_exception(error, False)
+##                except Exception as exception:
+##                        log_exception(exception, True)
+##
 
