@@ -1,38 +1,19 @@
 import itertools
 
 import numpy as np
-import scipy as sp
-import pandas as pd
 import open3d as o3d
-import matplotlib.pyplot as plt
 import multiprocessing as mp
 
-import json
-
-from tqdm import tqdm
 from sklearn.decomposition import PCA, IncrementalPCA
-from sklearn.linear_model import RANSACRegressor
 from sklearn.cluster import DBSCAN, OPTICS
-from itertools import repeat, product
 
-import tkinter as tk
 
 if __name__ == '__main__':
     mp.freeze_support()
 
 
-def visualize_point_clouds(pcd_list):
-
-    vis = o3d.visualization.Visualizer()
-    vis.create_window(width=960, height=540)
-
-    for pcd in pcd_list:
-        vis.add_geometry(pcd)
-
-    vis.get_render_option().background_color = np.asarray(
-        [0.5, 0.5, 0.5])  # np.asarray([0.1, 0.1, 0.1])
-    vis.run()
-    vis.destroy_window()
+def visualize_point_clouds(pcd_list, step):
+    o3d.visualization.draw_geometries(pcd_list, window_name=f'{step} - TVT', width=960, height=540)
 
 
 def read_mesh(path, down_sample, voxel_multiplier, fill, rdepth, visualize=False):
@@ -89,20 +70,9 @@ def read_mesh(path, down_sample, voxel_multiplier, fill, rdepth, visualize=False
         mesh_edge_resolution = np.average(np.linalg.norm(random_edges, axis=1))
 
     if visualize:
-        visualize_point_clouds([mesh])
+        visualize_point_clouds([mesh],'Mesh')
 
     return mesh, mesh_edge_resolution
-
-# def fill(mesh, rdepth):
-# pcd = o3d.geometry.PointCloud()
-# pcd.points = mesh.vertices
-# pcd.normals = mesh.vertex_normals
-# mesh, densities=o3d.geometry.TriangleMesh.create_from_point_cloud_poisson(pcd, depth=rdepth)
-# vertices = np.asarray(mesh.vertices)
-##
-##
-##
-# return mesh
 
 
 def create_point_cloud(mesh, resolution, update_resolution, scale_multiplier, flip_mesh, visualize=False):
@@ -126,8 +96,7 @@ def create_point_cloud(mesh, resolution, update_resolution, scale_multiplier, fl
 
         if visualize:
             visualize_point_clouds([
-                pcd.voxel_down_sample(voxel_size=5.0*resolution)
-            ])
+            ], 'Flipped Point Cloud')
 
         return pcd, resolution
 
@@ -150,8 +119,8 @@ def create_point_cloud(mesh, resolution, update_resolution, scale_multiplier, fl
 
         if visualize:
             visualize_point_clouds([
-                pcd.voxel_down_sample(voxel_size=5.0*resolution)
-            ])
+                pcd
+            ], 'Scaled Point Cloud')
 
         return pcd, resolution
 
@@ -228,113 +197,22 @@ def check_noise_worker(coords):
 
 
 def noise_removal(pcd, resolution, visualize=False):
-
     points = np.asarray(pcd.points)
     normals = np.asarray(pcd.normals)
 
-    pca = IncrementalPCA(n_components=3, batch_size=1000)
-    pca.fit(points)
-    comp = pca.transform(points)
+    def display_inlier_outlier(cloud, ind):
+        inlier_cloud = cloud.select_by_index(ind)
+        outlier_cloud = cloud.select_by_index(ind, invert=True)
+        outlier_cloud.paint_uniform_color([0.31, 0.14, 0.65])
+        inlier_cloud.paint_uniform_color([0.8, 0.8, 0.8])
+        
+        visualize_point_clouds([inlier_cloud,outlier_cloud], 'Outliers')
 
-    x_min = comp[:, 0].min()
-    x_max = comp[:, 0].max()
-    y_min = comp[:, 1].min()
-    y_max = comp[:, 1].max()
-
-    offset = 0.01
-    x_offset = offset * np.abs(x_max - x_min)
-    y_offset = offset * np.abs(y_max - y_min)
-
-    grid_size = 300.0  # 30 x 30 cm subgrid
-    x_resolution = int(
-        np.abs((x_max+x_offset) - (x_min-x_offset)) / (grid_size / resolution)) * 1j
-    y_resolution = int(
-        np.abs((y_max+y_offset) - (y_min-y_offset)) / (grid_size / resolution)) * 1j
-
-    grid_x = np.mgrid[(x_min-x_offset):(x_max+x_offset):x_resolution]
-    grid_y = np.mgrid[(y_min-y_offset):(y_max+y_offset):y_resolution]
-
-    grid_coords = np.array(list(itertools.product(
-        range(0, grid_x.shape[0]-1), range(0, grid_y.shape[0]-1))), dtype=object)
-
-    cpu_count = mp.cpu_count()
-    pool = mp.Pool(
-        processes=cpu_count,
-        initializer=check_noise_init,
-        initargs=(comp, grid_x, grid_y, resolution)
-    )
-
-    g_density_noise_indices = pool.map(check_noise_worker, grid_coords)
-    g_density_noise_indices = list(
-        itertools.chain.from_iterable(g_density_noise_indices))
-    g_density_non_noise_indices = np.delete(
-        np.arange(points.shape[0]), g_density_noise_indices)
-    pool.close()
-    pool.join()
-
-    pcd_noise_g_density = pcd.select_by_index(
-        g_density_noise_indices)  # changed to select_by_index
-    pcd_inlier = pcd.select_by_index(
-        g_density_noise_indices, invert=True)  # changed to select_by_index
-
-    noise_cluster_ratio = 0
-
-    model = DBSCAN(
-        eps=3.0 * resolution,
-        min_samples=10,
-        metric='euclidean',
-        algorithm='ball_tree',
-        leaf_size=30,
-        n_jobs=-1
-    )
-
-    '''
-	model = OPTICS(
-		min_samples=10,
-		metric='euclidean',
-		algorithm='ball_tree',
-		leaf_size=30,
-		n_jobs=-1
-	)
-	'''
-    model.fit(np.asarray(pcd_inlier.points))
-    labels, counts = np.unique(model.labels_, return_counts=True)
-
-    l_density_noise_indices = np.array([np.argwhere(model.labels_ == l).ravel() for l, c in zip(
-        labels, counts) if (c/len(model.labels_)) < noise_cluster_ratio], dtype=object)
-    l_density_noise_indices = list(
-        itertools.chain.from_iterable(l_density_noise_indices))
-    l_density_noise_indices.sort()
-
-    pcd_noise_l_density = pcd_inlier.select_by_index(
-        l_density_noise_indices)  # changed to select_by_index
-
-    pcd_inlier = pcd_inlier.select_by_index(
-        l_density_noise_indices, invert=True)  # changed to select_by_index
-
-    cl, distance_non_noise_indices = pcd_inlier.remove_statistical_outlier(
-        nb_neighbors=50,
-        std_ratio=15.0
-    )
-
-    pcd_noise_distance = pcd_inlier.select_by_index(
-        distance_non_noise_indices, invert=True)  # changed to select_by_index
-
-    pcd_inlier = pcd_inlier.select_by_index(
-        distance_non_noise_indices)  # changed to select_by_index
-
-    pcd_inlier.paint_uniform_color([0.6, 0.6, 0.6])
-    pcd_noise_g_density.paint_uniform_color([1.0, 0, 0])  # Red
-    pcd_noise_l_density.paint_uniform_color([0, 0, 1.0])  # Blue
-    pcd_noise_distance.paint_uniform_color([0, 1.0, 0])  # Green
+    pcd_inlier, ind = pcd.remove_radius_outlier(nb_points=15,
+                                                radius=3.0 * resolution)
 
     if visualize:
-        visualize_point_clouds([
-            pcd_inlier,
-            pcd_noise_g_density,
-            pcd_noise_l_density,
-            pcd_noise_distance
-        ])
+        display_inlier_outlier(pcd, ind)
 
     return pcd_inlier
 
@@ -417,20 +295,13 @@ def transform_point_cloud(pcd, visualize=False):
         'n_wrong_n_dir': np.sum(wrong_direction_mask)
     }
 
-    # print('Rotating around Z-axis ' + str(rot_z_cc_deg) + ' degrees.')
-    # print('Number of Wrong Normal Directions: ' + str(scan_stats['n_wrong_n_dir']))
-    # print('Scan Width: ' + ('%.2f' % scan_stats['width']) + ' m')
-    # print('Scan Height: ' + ('%.2f' % scan_stats['height']) + ' m')
-    # print('Scan Depth: ' + ('%.2f' % scan_stats['depth']) + ' m')
 
     pcd = o3d.geometry.PointCloud()
     pcd.points = o3d.utility.Vector3dVector(points_transformed)
     pcd.normals = o3d.utility.Vector3dVector(normals_transformed)
 
-    # c = o3d.geometry.TriangleMesh.create_coordinate_frame(size=100.0, origin=np.array([0., 0., 0.]))
-
     if visualize:
 
-        visualize_point_clouds([pcd])
+        visualize_point_clouds([pcd], 'Final Point Cloud')
 
     return pcd, scan_stats, components, mean, rot_z_cc_deg

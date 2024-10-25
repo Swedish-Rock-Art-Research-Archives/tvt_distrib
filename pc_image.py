@@ -1,26 +1,13 @@
-import sys
-import customtkinter as ctk
 from PIL import Image
 from skimage.morphology import disk
-from mpl_toolkits.mplot3d import Axes3D
-from itertools import repeat
-from sklearn.preprocessing import PowerTransformer
-from sklearn.manifold import TSNE
-from sklearn.cluster import MiniBatchKMeans
-from sklearn.decomposition import PCA, IncrementalPCA
-from tqdm import tqdm
 import imageio
 import scipy as sp
 import multiprocessing as mp
-import matplotlib.patches as mpatches
 import matplotlib.colorbar as colorbar
 import matplotlib.colors as colors
 import matplotlib.pyplot as plt
-import open3d as o3d
-import pandas as pd
 import numpy as np
 import warnings
-import itertools
 import skimage
 
 
@@ -266,71 +253,73 @@ def generate_images(pcd, scan_id):
     return depth_map, normal_map, pc_resolution, np.array([grid_x, grid_y])
 
 
-def rgb_save_images(save_path, scan_id, depth_map, normal_map, topo_maps, enhanced_topo_maps, transparency, img_type):
+def rgb_save_images(save_path, scan_id, depth_map, normal_map, topo_maps, enhanced_topo_maps, transparency, img_type,dpi, export_extra):
     rgb_transparency = (0, 0, 0) if transparency else None
     grey_transparency = 0 if transparency else None
+    
+    if export_extra:
 
-    with warnings.catch_warnings():
+        with warnings.catch_warnings():
 
-        warnings.simplefilter('ignore')
+            warnings.simplefilter('ignore')
 
-        cmap = plt.colormaps.get_cmap(DEPTH_MAP_COLORMAP)
-        cnorm = colors.Normalize(vmin=np.nanmin(
-            depth_map), vmax=np.nanmax(depth_map))
-        smap = plt.cm.ScalarMappable(norm=cnorm, cmap=cmap)
-        nan_mask = np.isnan(depth_map)
+            cmap = plt.colormaps.get_cmap(DEPTH_MAP_COLORMAP)
+            cnorm = colors.Normalize(vmin=np.nanmin(
+                depth_map), vmax=np.nanmax(depth_map))
+            smap = plt.cm.ScalarMappable(norm=cnorm, cmap=cmap)
+            nan_mask = np.isnan(depth_map)
 
-        depth_map_img = depth_map.copy()
-        depth_map_img[nan_mask] = 0.0
-        depth_map_img = skimage.img_as_ubyte(
-            smap.to_rgba(depth_map_img)[:, :, :3])
-        depth_map_img[nan_mask] = [0, 0, 0]
+            depth_map_img = depth_map.copy()
+            depth_map_img[nan_mask] = 0.0
+            depth_map_img = skimage.img_as_ubyte(
+                smap.to_rgba(depth_map_img)[:, :, :3])
+            depth_map_img[nan_mask] = [0, 0, 0]
 
-        if img_type != 'tif':
-            imageio.imwrite(f'{save_path}{scan_id}_depth_map.{img_type}', depth_map_img,
-                            transparency=rgb_transparency, quality=10, pixelformat='yuvj444p')
-        else:
-            depth_map_tif = Image.fromarray(depth_map_img)
-            depth_map_tif.save(
-                f'{save_path}{scan_id}_depth_map.{img_type}', dpi=(1800, 1800), quality=100)
+            if img_type != 'tif':
+                imageio.imwrite(f'{save_path}{scan_id}_depth_map.{img_type}', depth_map_img,
+                                transparency=rgb_transparency, quality=10, pixelformat='yuvj444p')
+            else:
+                depth_map_tif = Image.fromarray(depth_map_img)
+                depth_map_tif.save(
+                    f'{save_path}{scan_id}_depth_map.{img_type}', dpi=(dpi,dpi), quality=100)
 
-        fig = plt.figure(figsize=(8, 1))
-        ax = plt.gca()
-        cb = colorbar.ColorbarBase(
-            ax, cmap=cmap, norm=cnorm, orientation='horizontal')
-        cb.set_label('Depth Colorbar')
-        plt.tight_layout()
-        plt.savefig(save_path + scan_id+'_depth_map_colorbar.png')
-        plt.close()
+            fig = plt.figure(figsize=(8, 1))
+            ax = plt.gca()
+            cb = colorbar.ColorbarBase(
+                ax, cmap=cmap, norm=cnorm, orientation='horizontal')
+            cb.set_label('Depth Colorbar')
+            plt.tight_layout()
+            plt.savefig(save_path + scan_id+'_depth_map_colorbar.png')
+            plt.close()
 
-    with warnings.catch_warnings():
+        with warnings.catch_warnings():
 
-        warnings.simplefilter('ignore')
+            warnings.simplefilter('ignore')
 
-        nm_min = -1.0
-        nm_max = 1.0
-        nan_mask = np.isnan(normal_map[:, :, 0])
+            nm_min = -1.0
+            nm_max = 1.0
+            nan_mask = np.isnan(normal_map[:, :, 0])
 
-        normal_map_img = (normal_map - nm_min) / (nm_max - nm_min)
-        normal_map_img[nan_mask] = [0.0, 0.0, 0.0]
-        normal_map_img = skimage.img_as_ubyte(normal_map_img)
+            normal_map_img = (normal_map - nm_min) / (nm_max - nm_min)
+            normal_map_img[nan_mask] = [0.0, 0.0, 0.0]
+            normal_map_img = skimage.img_as_ubyte(normal_map_img)
 
-        derivative_map_img = normal_map_img.copy()
-        derivative_map_img[:, :, 2] = 0
+            derivative_map_img = normal_map_img.copy()
+            derivative_map_img[:, :, 2] = 0
 
-        if img_type != 'tif':
-            imageio.imwrite(save_path + scan_id+'_normal_map.'+img_type, normal_map_img,
-                            transparency=rgb_transparency, quality=10, pixelformat='yuvj444p')
-            imageio.imwrite(save_path + scan_id+'_derivative_map.'+img_type, derivative_map_img,
-                            transparency=rgb_transparency, quality=10, pixelformat='yuvj444p')
-        else:
-            normal_map_tif = Image.fromarray(normal_map_img)
-            normal_map_tif.save(
-                save_path+scan_id+'_normal_map.'+img_type, dpi=(1800, 1800), quality=100)
+            if img_type != 'tif':
+                imageio.imwrite(save_path + scan_id+'_normal_map.'+img_type, normal_map_img,
+                                transparency=rgb_transparency, quality=10, pixelformat='yuvj444p')
+                imageio.imwrite(save_path + scan_id+'_derivative_map.'+img_type, derivative_map_img,
+                                transparency=rgb_transparency, quality=10, pixelformat='yuvj444p')
+            else:
+                normal_map_tif = Image.fromarray(normal_map_img)
+                normal_map_tif.save(
+                    save_path+scan_id+'_normal_map.'+img_type, dpi=(dpi,dpi), quality=100)
 
-            derivative_map_tif = Image.fromarray(derivative_map_img)
-            derivative_map_tif.save(
-                save_path+scan_id+'_derivative_map.'+img_type, dpi=(1800, 1800), quality=100)
+                derivative_map_tif = Image.fromarray(derivative_map_img)
+                derivative_map_tif.save(
+                    save_path+scan_id+'_derivative_map.'+img_type, dpi=(dpi,dpi), quality=100)
 
     with warnings.catch_warnings():
 
@@ -372,7 +361,7 @@ def rgb_save_images(save_path, scan_id, depth_map, normal_map, topo_maps, enhanc
             else:
                 topo_map_tif = Image.fromarray(topo_map_img)
                 topo_map_tif.save(save_path+'topo_maps/'+scan_id+'_topo_map_' +
-                                  key + '.'+img_type, dpi=(1800, 1800), quality=100)
+                                  key + '.'+img_type, dpi=(dpi,dpi), quality=100)
 
     with warnings.catch_warnings():
 
@@ -412,7 +401,7 @@ def rgb_save_images(save_path, scan_id, depth_map, normal_map, topo_maps, enhanc
             else:
                 enhanced_topo_tif = Image.fromarray(enhanced_topo_map_img)
                 enhanced_topo_tif.save(save_path+'enhanced_topo_maps/'+scan_id +
-                                       '_enhanced_topo_map_' + key + '.'+img_type, dpi=(1800, 1800), quality=100)
+                                       '_enhanced_topo_map_' + key + '.'+img_type, dpi=(dpi,dpi), quality=100)
 
     with warnings.catch_warnings():
 
@@ -442,7 +431,7 @@ def rgb_save_images(save_path, scan_id, depth_map, normal_map, topo_maps, enhanc
             else:
                 texture_map_tif = Image.fromarray(texture_map_img)
                 texture_map_tif.save(
-                    save_path + scan_id+'_texture_map.'+img_type, dpi=(1800, 1800), quality=100)
+                    save_path + scan_id+'_texture_map.'+img_type, dpi=(dpi,dpi), quality=100)
 
             cmap = plt.colormaps.get_cmap(BLENDED_MAP_COLORMAP)
             smap = plt.cm.ScalarMappable(norm=None, cmap=cmap)
@@ -474,74 +463,75 @@ def rgb_save_images(save_path, scan_id, depth_map, normal_map, topo_maps, enhanc
             else:
                 blended_map_tif = Image.fromarray(blended_map_img)
                 blended_map_tif.save(save_path + 'blended_maps/'+scan_id +
-                                     '_blended_map_' + key + '.'+img_type, dpi=(1800, 1800), quality=100)
+                                     '_blended_map_' + key + '.'+img_type, dpi=(dpi,dpi), quality=100)
 
 
-def grey_save_images(save_path, scan_id, depth_map, normal_map, topo_maps, enhanced_topo_maps, transparency, img_type):
+def grey_save_images(save_path, scan_id, depth_map, normal_map, topo_maps, enhanced_topo_maps, transparency, img_type, dpi,export_extra):
     rgb_transparency = (0, 0, 0) if transparency else None
     grey_transparency = 0 if transparency else None
+    
+    if export_extra:
+        with warnings.catch_warnings():
 
-    with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
 
-        warnings.simplefilter('ignore')
+            cmap = plt.colormaps.get_cmap(DEPTH_MAP_COLORMAP)
+            cnorm = colors.Normalize(vmin=np.nanmin(
+                depth_map), vmax=np.nanmax(depth_map))
+            smap = plt.cm.ScalarMappable(norm=cnorm, cmap=cmap)
+            nan_mask = np.isnan(depth_map)
 
-        cmap = plt.colormaps.get_cmap(DEPTH_MAP_COLORMAP)
-        cnorm = colors.Normalize(vmin=np.nanmin(
-            depth_map), vmax=np.nanmax(depth_map))
-        smap = plt.cm.ScalarMappable(norm=cnorm, cmap=cmap)
-        nan_mask = np.isnan(depth_map)
+            depth_map_img = depth_map.copy()
+            depth_map_img[nan_mask] = 0.0
+            depth_map_img = skimage.img_as_ubyte(
+                smap.to_rgba(depth_map_img)[:, :, :3])
+            depth_map_img[nan_mask] = [0, 0, 0]
 
-        depth_map_img = depth_map.copy()
-        depth_map_img[nan_mask] = 0.0
-        depth_map_img = skimage.img_as_ubyte(
-            smap.to_rgba(depth_map_img)[:, :, :3])
-        depth_map_img[nan_mask] = [0, 0, 0]
+            if img_type != 'tif':
+                imageio.imwrite(save_path + scan_id+'_depth_map.'+img_type, depth_map_img,
+                                transparency=rgb_transparency, quality=10, pixelformat='yuvj444p')
+            else:
+                depth_map_tif = Image.fromarray(depth_map)
+                depth_map_tif.save(
+                    save_path+scan_id+'_depth_map.'+img_type, dpi=(dpi, dpi), quality=100)
 
-        if img_type != 'tif':
-            imageio.imwrite(save_path + scan_id+'_depth_map_grey.'+img_type, depth_map_img,
-                            transparency=rgb_transparency, quality=10, pixelformat='yuvj444p')
-        else:
-            depth_map_tif = Image.fromarray(depth_map)
-            depth_map_tif.save(
-                save_path+scan_id+'_depth_map_grey.'+img_type, dpi=(1800, 1800), quality=100)
+            fig = plt.figure(figsize=(8, 1))
+            ax = plt.gca()
+            cb = colorbar.ColorbarBase(
+                ax, cmap=GRAY_COLORMAP, norm=cnorm, orientation='horizontal')
+            cb.set_label('Depth Colorbar')
+            plt.tight_layout()
+            plt.savefig(save_path + scan_id+'_depth_map_colorbar.png')
+            plt.close()
 
-        fig = plt.figure(figsize=(8, 1))
-        ax = plt.gca()
-        cb = colorbar.ColorbarBase(
-            ax, cmap=GRAY_COLORMAP, norm=cnorm, orientation='horizontal')
-        cb.set_label('Depth Colorbar')
-        plt.tight_layout()
-        plt.savefig(save_path + scan_id+'_depth_map_colorbar.png')
-        plt.close()
+        with warnings.catch_warnings():
 
-    with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
 
-        warnings.simplefilter('ignore')
+            nm_min = -1.0
+            nm_max = 1.0
+            nan_mask = np.isnan(normal_map[:, :, 0])
 
-        nm_min = -1.0
-        nm_max = 1.0
-        nan_mask = np.isnan(normal_map[:, :, 0])
+            normal_map_img = (normal_map - nm_min) / (nm_max - nm_min)
+            normal_map_img[nan_mask] = [0.0, 0.0, 0.0]
+            normal_map_img = skimage.img_as_ubyte(normal_map_img)
 
-        normal_map_img = (normal_map - nm_min) / (nm_max - nm_min)
-        normal_map_img[nan_mask] = [0.0, 0.0, 0.0]
-        normal_map_img = skimage.img_as_ubyte(normal_map_img)
+            derivative_map_img = normal_map_img.copy()
+            derivative_map_img[:, :, 2] = 0
 
-        derivative_map_img = normal_map_img.copy()
-        derivative_map_img[:, :, 2] = 0
+            if img_type != 'tif':
+                imageio.imwrite(save_path + scan_id+'_normal_map.'+img_type, normal_map_img,
+                                transparency=rgb_transparency, quality=10, pixelformat='yuvj444p')
+                imageio.imwrite(save_path + scan_id+'_derivative_map.'+img_type, derivative_map_img,
+                                transparency=rgb_transparency, quality=10, pixelformat='yuvj444p')
+            else:
+                normal_map_tif = Image.fromarray(normal_map_img)
+                normal_map_tif.save(
+                    save_path+scan_id+'_normal_map.'+img_type, dpi=(dpi, dpi), quality=100)
 
-        if img_type != 'tif':
-            imageio.imwrite(save_path + scan_id+'_normal_map.'+img_type, normal_map_img,
-                            transparency=rgb_transparency, quality=10, pixelformat='yuvj444p')
-            imageio.imwrite(save_path + scan_id+'_derivative_map.'+img_type, derivative_map_img,
-                            transparency=rgb_transparency, quality=10, pixelformat='yuvj444p')
-        else:
-            normal_map_tif = Image.fromarray(normal_map_img)
-            normal_map_tif.save(
-                save_path+scan_id+'_normal_map.'+img_type, dpi=(1800, 1800), quality=100)
-
-            derivative_map_tif = Image.fromarray(derivative_map_img)
-            derivative_map_tif.save(
-                save_path+scan_id+'_derivative_map.'+img_type, dpi=(1800, 1800), quality=100)
+                derivative_map_tif = Image.fromarray(derivative_map_img)
+                derivative_map_tif.save(
+                    save_path+scan_id+'_derivative_map.'+img_type, dpi=(dpi, dpi), quality=100)
 
     with warnings.catch_warnings():
 
@@ -567,7 +557,7 @@ def grey_save_images(save_path, scan_id, depth_map, normal_map, topo_maps, enhan
             else:
                 topo_map_tif = Image.fromarray(topo_map_img)
                 topo_map_tif.save(save_path + 'topo_maps/'+scan_id+'_topo_map_' +
-                                  key + '_grey.'+img_type, dpi=(1800, 1800), quality=100)
+                                  key + '_grey.'+img_type, dpi=(dpi, dpi), quality=100)
 
             topo_map_img = topo_map.copy()
             topo_map_img[nan_mask] = 0.0
@@ -598,7 +588,7 @@ def grey_save_images(save_path, scan_id, depth_map, normal_map, topo_maps, enhan
             else:
                 enhanced_topo_tif = Image.fromarray(enhanced_topo_map_img)
                 enhanced_topo_tif.save(save_path + 'enhanced_topo_maps/'+scan_id +
-                                       '_enhanced_topo_map_' + key + '_grey.'+img_type, dpi=(1800, 1800), quality=100)
+                                       '_enhanced_topo_map_' + key + '_grey.'+img_type, dpi=(dpi, dpi), quality=100)
 
             enhanced_topo_map_img = enhanced_topo_map.copy()
             enhanced_topo_map_img[nan_mask] = 0.0
@@ -627,19 +617,23 @@ def grey_save_images(save_path, scan_id, depth_map, normal_map, topo_maps, enhan
             )
             texture_map_img[nan_mask] = [0.0]
             texture_map_img = skimage.img_as_ubyte(texture_map_img)
+            texture_map_img2 = Image.fromarray(
+                texture_map_img.astype(np.uint8))
 
             if img_type != 'tif':
-                imageio.imwrite(save_path + scan_id+'_texture_map.'+img_type, texture_map_img,
-                                transparency=grey_transparency, quality=10, pixelformat='yuvj444p')
+                texture_map_img2.save(
+                    save_path + scan_id+'_texture_map.'+img_type, dpi=(dpi, dpi), compress_level=0)
+                # imageio.imwrite(save_path + scan_id+'_texture_map.'+img_type, texture_map_img,
+                #                 transparency=grey_transparency, quality=10, pixelformat='yuv444p')
             else:
                 texture_map_tif = Image.fromarray(texture_map_img)
                 texture_map_tif.save(
-                    save_path + scan_id+'_texture_map.'+img_type, dpi=(1800, 1800), quality=100)
+                    save_path + scan_id+'_texture_map.'+img_type, dpi=(dpi, dpi), quality=100)
 
             cmap = plt.colormaps.get_cmap(BLENDED_MAP_COLORMAP)
             smap = plt.cm.ScalarMappable(norm=None, cmap=cmap)
             nan_mask = np.isnan(enhanced_topo_map)
-            texture_map_img[nan_mask] = 0
+            # texture_map_img[nan_mask] = 0
 
             blended_map_img = enhanced_topo_map.copy()
             blended_map_img[nan_mask] = 0.0
@@ -651,11 +645,14 @@ def grey_save_images(save_path, scan_id, depth_map, normal_map, topo_maps, enhan
             blended_map_img = alpha * blended_map_img + \
                 (1 - alpha) * texture_map_img
             blended_map_img = blended_map_img.astype(np.uint8)
+            blended_map_img = Image.fromarray(blended_map_img)
 
             if img_type != 'tif':
-                imageio.imwrite(save_path + 'blended_maps/'+scan_id+'_blended_map_' + key + '_grey.'+img_type,
-                                blended_map_img, transparency=grey_transparency, quality=10, pixelformat='yuvj444p')
+                blended_map_img.save(
+                    save_path + 'blended_maps/'+scan_id+'_blended_map_' + key + '_grey.'+img_type, dpi=(dpi, dpi), compress_level=0)
+                # imageio.imwrite(save_path + 'blended_maps/'+scan_id+'_blended_map_' + key + '_grey.'+img_type,
+                #                 blended_map_img, transparency=grey_transparency, quality=10, pixelformat='yuvj444p')
             else:
                 blended_map_tif = Image.fromarray(blended_map_img)
                 blended_map_tif.save(save_path + 'blended_maps/'+scan_id+'_blended_map_' +
-                                     key + '_grey.'+img_type, dpi=(1800, 1800), quality=100)
+                                     key + '_grey.'+img_type, dpi=(dpi, dpi), quality=100)
