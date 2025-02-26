@@ -1,5 +1,5 @@
 from pc_image import *
-from pc_mesh import *
+from pc_point import *
 import open3d as o3d
 import pandas as pd
 import numpy as np
@@ -16,7 +16,7 @@ import multiprocessing
 multiprocessing.freeze_support()
 
 
-class topovis:
+class pointvis:
 
     PROCESS = psutil.Process(os.getpid())
     GIGA = 10 ** 9
@@ -45,9 +45,9 @@ class topovis:
             if array:
                 os.makedirs(path + '/arrays')
 
-    def start_tv(data_path, save_path, meta_data_path, visualize_steps, downsample_mesh, voxel_multiplier, fill_holes, depth_size, flip_mesh, update_resolution, scale_multiplier, progress_text, array, files, export_rgb, export_grey, img_type, transparency, clean_noise, auto_rotate, dpi):
+    def start_pv(data_path, save_path, meta_data_path, visualize_steps, downsample_mesh, voxel_multiplier, flip_pcd, update_resolution, scale_multiplier, progress_text, array, files, export_rgb, export_grey, img_type, transparency, clean_noise, auto_rotate, dpi):
         total_time_start = time.time()
-        stages = ['Organising input', 'Reading mesh', 'Computing normals', 'Converting mesh to point cloud', 'Removing outliers',
+        stages = ['Organising input', 'Reading point data', 'Computing normals and processing point cloud', 'Removing outliers',
                   'Transforming point cloud', 'Creating images', 'Creating topo maps', 'Enhancing images', 'Saving images', 'Saving summary', 'Processing finished']
 
         stage = stages[0]
@@ -77,6 +77,7 @@ class topovis:
             'rotation': [],
             'cleaning': [],
             'downsampling': [],
+            'final_pc_resolution': [],
         }
         o3d.utility.set_verbosity_level(
             o3d.utility.VerbosityLevel.Error)
@@ -91,13 +92,13 @@ class topovis:
                 # Create Data Folder
                 ########################################################
 
-                topovis.create_panel_folder(
+                pointvis.create_panel_folder(
                     os.path.join(str(save_path), scan_id), array)
 
                 meta_data['id'].append(scan_id)
                 if auto_rotate:
                     meta_data['rotation'].append('Auto')
-                elif flip_mesh:
+                elif flip_pcd:
                     meta_data['rotation'].append('Strict')
                 else:
                     meta_data['rotation'].append('None')
@@ -106,7 +107,11 @@ class topovis:
                 if downsample_mesh:
                     meta_data['downsampling'].append(voxel_multiplier)
                 else:
-                    meta_data['downsampling'].append('None')
+                    meta_data['downsampling'].append(None) 
+                meta_data['mesh_n_vertices'].append(None)
+                meta_data['mesh_edge_resolution'].append(None)
+                meta_data['coord_units_updated'].append(None)
+                   
 
                 ########################################################
 
@@ -120,39 +125,29 @@ class topovis:
                 progress_text.update()
 
                 time_start = time.time()
-
-                mesh, mesh_edge_resolution = read_mesh(
-                    path=read_path,
-                    down_sample=downsample_mesh,
-                    voxel_multiplier=voxel_multiplier,
-                    fill=fill_holes,
-                    rdepth=depth_size,
-                    visualize=visualize_steps)
-
                 stage = stages[2]
                 progress_text.configure(text='{}: {}...'.format(scan_id, stage))
                 progress_text.update()
-
-                meta_data['mesh_edge_resolution'].append(mesh_edge_resolution)
-                meta_data['mesh_n_vertices'].append(len(mesh.vertices))
-
+                
+                if os.path.splitext(read_path)[1] in ['.las','.laz']:
+                    input_pcd = conv_las(read_path,downsample=downsample_mesh,
+                    voxel_multiplier=voxel_multiplier,visualize = visualize_steps)
+                    
+                else:
+                    input_pcd = conv_pcd(read_path,downsample=downsample_mesh,
+                    voxel_multiplier=voxel_multiplier,visualize = visualize_steps)
+                    
                 stage = stages[3]
                 progress_text.configure(text='{}: {}...'.format(scan_id, stage))
-                progress_text.update()
+                progress_text.update()  
+                  
+                pcd, pcd_resolution = process_point_cloud(pcd = input_pcd,
+                                                          update_resolution = update_resolution, scale_multiplier = scale_multiplier, flip_pcd = flip_pcd, visualize=visualize_steps)
 
-                pcd, mesh_edge_resolution = create_point_cloud(
-                    mesh,
-                    mesh_edge_resolution,
-                    update_resolution=update_resolution,
-                    scale_multiplier=scale_multiplier,
-                    flip_mesh=flip_mesh,
-                    visualize=visualize_steps
-                )
 
-                if np.abs(meta_data['mesh_edge_resolution'][-1] - mesh_edge_resolution) < 0.001:
-                    meta_data['coord_units_updated'].append(False)
-                else:
-                    meta_data['coord_units_updated'].append(True)
+                
+
+                meta_data['pc_resolution'].append(pcd_resolution)
 
                 meta_data['pc_n_points'].append(len(pcd.points))
 
@@ -174,7 +169,7 @@ class topovis:
 
                     pcd = noise_removal(
                         pcd,
-                        mesh_edge_resolution,
+                        pcd_resolution,
                         visualize=visualize_steps
                     )
 
@@ -246,11 +241,11 @@ class topovis:
                 progress_text.update()
                 time_start = time.time()
 
-                depth_map, normal_map, pc_resolution, pix_to_coords_map = generate_images(
+                depth_map, normal_map, final_pc_resolution, pix_to_coords_map = generate_images(
                     pcd, scan_id
                 )
 
-                meta_data['pc_resolution'].append(pc_resolution)
+                meta_data['final_pc_resolution'].append(final_pc_resolution)
                 meta_data['img_width'].append(depth_map.shape[1])
                 meta_data['img_height'].append(depth_map.shape[0])
 
@@ -276,12 +271,12 @@ class topovis:
 
                 topo_map_texture_level = create_topo_map(
                     depth_map, scan_id,
-                    sigma=(4.0 / pc_resolution)
+                    sigma=(4.0 / final_pc_resolution)
                 )
 
                 topo_map_object_level = create_topo_map(
                     depth_map, scan_id,
-                    sigma=(32.0 / pc_resolution)
+                    sigma=(32.0 / final_pc_resolution)
                 )
 
                 if array:
@@ -402,17 +397,16 @@ class topovis:
                 meta_data['proc_time'].append(pd.to_timedelta(
                     scan_time_end - scan_time_start, unit='s'))
                 for key,val in meta_data.items():
-                    if len(val) != len(meta_data['id']):
+                    if val==None:
                         meta_data[key].append('ERROR')
                 
             except:
                 with open(os.path.join(save_path, f"error_{datetime.now().strftime('%y%m%d%H%M%S')}.txt"), 'w') as f:
                     f.write(f"{traceback.format_exc()}\n") if traceback.format_exc() else f.write(f"Error: {sys.exc_info()}\n")
-                
                 if scan_id not in meta_data['id']:
                     meta_data['id'].append(scan_id) 
                 for key,val in meta_data.items():
-                    if len(val) != len(meta_data['id']):
+                    if val==None:
                         meta_data[key].append('ERROR')
                 
 
@@ -423,7 +417,3 @@ class topovis:
         df_meta_data.to_csv(meta_data_path, index=False)
 
         total_time_end = time.time()
-
-        stage = stages[11]
-        progress_text.configure(text='{}: {}...'.format(scan_id, stage))
-        progress_text.update()

@@ -95,7 +95,7 @@ def create_point_cloud(mesh, resolution, update_resolution, scale_multiplier, fl
             resolution = scale_multiplier * resolution
 
         if visualize:
-            visualize_point_clouds([
+            visualize_point_clouds([ pcd
             ], 'Flipped Point Cloud')
 
         return pcd, resolution
