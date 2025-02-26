@@ -1,28 +1,29 @@
 # from pc_image import *
 # from pc_mesh import *
 from topovis_main import *
+from pointvis_main import *
 import ftfy
-from multiprocessing import Process
+# from multiprocessing import Process
 
 import tkinter as tk
-from tkinter import ttk
+# from tkinter import ttk
 from tkinter import *
 from tkinter.filedialog import *
 
 import customtkinter as ctk
 from CTkToolTip import *
 
-import distutils.util
+# import distutils.util
 
 import os
 import sys
-import ctypes
+# import ctypes
 
 from PIL import Image
 
-import datetime
+from datetime import datetime
 
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+# from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 import multiprocessing
 multiprocessing.freeze_support()
@@ -35,20 +36,21 @@ def dist_path(relative_path):
 #### Help texts####
 overview_txt = """Topography Visualisation Toolbox was originally developed using landscape archaeology methods to highlight the detail of carved rock art. This basic version of the toolbox includes a tool that improves the visualisation of carved surfaces, particularly in cultural heritage applications. 
                                     
-Click on the Topo Vis tab to visualise mesh data as images using a range of parameters. For further guidance on how to use the tool, hover over the information icons within with Topo Vis tab.  A pop-up will appear with information about the required input(s) and suggestions for how to use the tools with your data.
+Click on the Topo Vis tab to visualise mesh data as images using a range of parameters. Click on the Point Vis tab to visualise point data.  For further guidance on how to use the tools, hover over the information icons within each tab.  A pop-up will appear with information about the required input(s) and suggestions for how to use the tools with your data.
                                     
 The program is provided "AS IS" under MIT copyright license.
 
 """
 
 mesh_info_txt = 'Path of folder containing mesh files (.obj, .stl, .ply)'
+point_info_txt = 'Path of folder containing point files (.las, .laz, .pcd, .xyz)'
 out_info_txt = 'Path of folder the processed images will be saved in. If this folder does not exist, manually type the path in the text box and it will be created during processing.  If this field is empty when you start a process, a default directory will be created in the input directory.'
-downsample_txt = 'Simplifies the mesh with vertex clustering.  Set the voxel multiplier to determine the voxel (region) size - final voxel size is equivalent to voxel multiplier * mesh edge resolution.'
-update_res_txt = 'Scales the values in the point cloud derived from the mesh.  Set the scale multiplier to the desired conversion.  Setting this parameter >1 can be useful for meshes derived from SfM data.'
+downsample_txt = 'Simplifies the input data with vertex clustering.  Set the voxel multiplier to determine the voxel (region) size - final voxel size is equivalent to voxel multiplier * data resolution.'
+update_res_txt = 'Scales the values in the input data.  Set the scale multiplier to the desired conversion.  Setting this parameter >1 can be useful for data derived from SfM.'
 fill_txt = 'Fills holes in the mesh using Poisson surface reconstruction (Khazdan,2006; Open3D).  Set the octree depth parameter to influence the resolution of the resulting mesh - a higher value will generate a mesh with more detail.'
 rotate_txt = 'STRICT will rotate the resulting point cloud using a [[1, 0, 0, 0], [0, -1, 0, 0],[0, 0, -1, 0], [0, 0, 0, 1]] matrix.  AUTO will rotate the point cloud using incremental principal component analysis to find the best angle of rotation.'
 out_array_txt = 'Saves .pcd and .npz files of the original and transformed points.'
-visualise_txt = 'Will display the results of the mesh and point cloud processing stages.'
+visualise_txt = 'Will display the results of the processing and cleaning stages.'
 transparent_txt = 'Export each plot with a transparent background. If unchecked, plots will have a black background.  Please also choose a suitable export format when using a transparent background.'
 rgb_txt = 'Export only plots in RGB colourmap.'
 grey_txt = 'Export only plot in greyscale.'
@@ -57,7 +59,6 @@ grey_txt = 'Export only plot in greyscale.'
 info_icon = ctk.CTkImage(Image.open(dist_path('info.png')), size=(13, 13))
 folder = ctk.CTkImage(Image.open(dist_path('folder.png')), size=(21, 21))
 play = ctk.CTkImage(Image.open(dist_path('play.png')), size=(35, 35))
-wait = ctk.CTkImage(Image.open(dist_path('restart.png')), size=(35, 35))
 generate = ctk.CTkImage(Image.open(dist_path('generate.png')), size=(21, 21))
 expand = ctk.CTkImage(Image.open(dist_path('expand.png')), size=(12, 12))
 expand_rot = ctk.CTkImage(Image.open(dist_path('expand_rot.png')), size=(12, 12))
@@ -152,11 +153,7 @@ class InputParameters(ctk.CTkFrame):
         else:
             cleaning_val = 'No'
         
-        curr_time = datetime.datetime.now()
-        date = f"{curr_time.day}{curr_time.month}{curr_time.year}"
-        time = f"{curr_time.hour}{curr_time.minute}"
-        
-        new_out_dir = f"{input_dir.get()}/TVT/DS{ds_val}_RES{res_val}_{cleaning_val}CLEAN_{date}{time}"
+        new_out_dir = f"{input_dir.get()}/TVT/DS{ds_val}_RES{res_val}_{cleaning_val}CLEAN_{datetime.now().strftime('%y%m%d%H%M%S')}"
         field.delete(0, END)
         field.insert(tk.END, new_out_dir)
         return new_out_dir        
@@ -177,7 +174,7 @@ class ProcessingSettings(ctk.CTkFrame):
         self.downsampling_info.grid(row=0, column=0, sticky='ns', pady=5)
         self.downsampling_info_balloon = CTkToolTip(
             self.downsampling_info, message=downsample_txt, wraplength=250, text_color='whitesmoke', alpha=1, font=self.tooltip_font)
-        self.downsampling_spinbox = ctk.CTkCheckBox(self, text='Downsample Mesh', onvalue=1, offvalue=0, font=self.menu_font,
+        self.downsampling_spinbox = ctk.CTkCheckBox(self, text='Downsample Data', onvalue=1, offvalue=0, font=self.menu_font,
                                                     command=lambda: self.change_entry_state(self.downsampling_spinbox, self.voxel_multiplier, 1.0))
         self.downsampling_spinbox.grid(
             row=0, column=1, columnspan=3, padx=5, pady=5, sticky='ew')
@@ -206,7 +203,7 @@ class ProcessingSettings(ctk.CTkFrame):
         self.rotation_info.grid(row=4, column=0, sticky='ns', pady=5)
         self.rotation_info_balloon = CTkToolTip(self.rotation_info, message=rotate_txt, wraplength=250,text_color='whitesmoke', alpha=1, font=self.tooltip_font)
         
-        self.rotation_label = ctk.CTkCheckBox(self, text='Rotate Mesh',
+        self.rotation_label = ctk.CTkCheckBox(self, text='Rotate Data',
                                                     onvalue=1, offvalue=0, font=self.menu_font, command = lambda: self.change_combo_state(self.rotation_label, self.rotation_entry))
         self.rotation_label.grid(row=4, column=1, columnspan=3, padx=5, pady=5, sticky='ew')
         self.rotation_entry = ctk.CTkComboBox(self, font=self.menu_font, border_width=1.5, state='disabled',dropdown_font=self.menu_font, values=['AUTO','STRICT'])
@@ -218,7 +215,7 @@ class ProcessingSettings(ctk.CTkFrame):
             self, image=info_icon, text='', fg_color='transparent', command=None, width=30)
         self.clean_info.grid(row=6, column=0, sticky='ns', pady=5)
         self.clean_info_balloon = CTkToolTip(
-            self.clean_info, message='Remove noise from converted mesh based on the number of neighbours', wraplength=250, text_color='whitesmoke', alpha=1, font=self.tooltip_font)
+            self.clean_info, message='Remove noise from data based on the number of neighbours', wraplength=250, text_color='whitesmoke', alpha=1, font=self.tooltip_font)
         self.clean_spinbox = ctk.CTkCheckBox(self, text='Outlier Removal',
                                                     onvalue=1, offvalue=0, font=self.menu_font)
         self.clean_spinbox.grid(
@@ -284,9 +281,9 @@ class OutputSettings(ctk.CTkFrame):
             row=4, column=2, columnspan=2, padx=0, sticky='ew')
         
 class OptionalSettings(ctk.CTkFrame):
-    def __init__(self, master, **kwargs):
-        super().__init__(master, **kwargs)
-        
+    def __init__(self, master,hide_fill, **kwargs):
+        super().__init__(master, hide_fill,**kwargs)
+            
         self.menu_font = ctk.CTkFont(
                     family="Barlow Semi Condensed Thin", size=16)
         self.tooltip_font = ctk.CTkFont(
@@ -296,18 +293,24 @@ class OptionalSettings(ctk.CTkFrame):
         
         self.fill_info = ctk.CTkButton(
             self, image=info_icon, text='', fg_color='transparent', command=None, width=30)
-        self.fill_info.grid(row=0, column=0, sticky='ns', pady=5)
+        
         self.fill_info_balloon = CTkToolTip(
             self.fill_info, message=fill_txt, wraplength=250, text_color='whitesmoke', alpha=1, font=self.tooltip_font)
         self.fill_spinbox = ctk.CTkCheckBox(self, text='Fill Mesh', onvalue=1,
                                             offvalue=0, font=self.menu_font,
                                             command=lambda: ProcessingSettings.change_entry_state(self.fill_spinbox, self.depth, 10))
-        self.fill_spinbox.grid(
-            row=0, column=1, columnspan=3, padx=5, pady=5, sticky='ew')
+        
         self.depth = ctk.CTkEntry(self, placeholder_text='Octree Depth: e.g. 9', font=self.input_font, border_width=1.5,
                                   state='disabled')
-        self.depth.grid(row=1, column=1, columnspan=3,
-                        padx=20, pady=5, sticky='ew')
+        
+        if hide_fill == False:
+            self.fill_info.grid(row=0, column=0, sticky='ns', pady=5)
+            self.fill_spinbox.grid(
+                row=0, column=1, columnspan=3, padx=5, pady=5, sticky='ew')
+            self.depth.grid(row=1, column=1, columnspan=3,
+                            padx=20, pady=5, sticky='ew')
+        
+        
 
         self.array_info = ctk.CTkButton(
             self, image=info_icon, text='', fg_color='transparent', command=None, width=30)
@@ -342,6 +345,14 @@ class TvtApp(ctk.CTk, tk.Tk):
                     family="Barlow Semi Condensed Light", size=14, weight='bold')
         self.input_font = ctk.CTkFont(
                     family="Barlow Semi Condensed Light", size=14, slant='italic')
+        
+        def recolour_active():
+            active = self.topview.get()
+            for button in self.topview._segmented_button._buttons_dict:
+                if button == active:
+                    self.topview._segmented_button._buttons_dict[button].configure(text_color='#89d3e8')
+                else:
+                    self.topview._segmented_button._buttons_dict[button].configure(text_color='#DCE4EE')
 
 # Define app
         self.title('Topography Visualisation Toolbox')
@@ -361,9 +372,10 @@ class TvtApp(ctk.CTk, tk.Tk):
         self.rowconfigure(0, weight=0)
         self.rowconfigure(1, weight=1)
 
-        self.topview = ctk.CTkTabview(self, corner_radius=20)
+        self.topview = ctk.CTkTabview(self)
+        self.topview.configure(command=recolour_active)
         self.topview.grid(row=1, column=0, padx=(
-            20, 20), pady=(5, 5), sticky='nsew')
+            10, 10), pady=(5, 10), sticky='nsew')
     # Overview Tab
         self.topview.add('Overview')
         self.topview.tab('Overview').columnconfigure(0, weight=1)
@@ -380,7 +392,7 @@ class TvtApp(ctk.CTk, tk.Tk):
         self.topview.tab('Topo Vis').columnconfigure((0), weight=1)
             
         def run_tvt():
-            self.tv_run_button.configure(image=wait, text=None)
+            self.tv_run_button.configure(image=None, text=None)
             self.tv_run_button.update()
             
             if bool(self.output_directory.tv_direct_entry.get()) == False:
@@ -392,7 +404,7 @@ class TvtApp(ctk.CTk, tk.Tk):
             
             save_path = ftfy.fix_text(default_output_dir)
             
-            meta_data_path = f"{default_output_dir}/output_summary.csv"
+            meta_data_path = f"{default_output_dir}/summary_{datetime.now().strftime('%y%m%d%H%M%S')}.csv"
             visualize_steps = bool(self.optional_section.visualise_spinbox.get())
             
             downsample_mesh = bool(self.processing_section.downsampling_spinbox.get())
@@ -521,9 +533,9 @@ class TvtApp(ctk.CTk, tk.Tk):
         self.optional_header.grid(row=optional_header_offset, column=0, padx=3, pady=(40,0), sticky='ew')
         
         optional_sect_offset = self.optional_header.grid_info()['row']+self.optional_header.grid_info()['rowspan']
-        self.optional_section = OptionalSettings(self.frame_container, border_width=0)
+        self.optional_section = OptionalSettings(self.frame_container, hide_fill=False, border_width=0)
         
-        self.expand_section = ctk.CTkButton(self.frame_container, image=expand_rot, text='', fg_color='transparent', command=lambda: self.expand_menu(self.optional_section,optional_sect_offset),width=20)
+        self.expand_section = ctk.CTkButton(self.frame_container, image=expand_rot, text='', fg_color='transparent', command=lambda: self.expand_menu(self.optional_section,optional_sect_offset,self.expand_section),width=20)
         self.expand_section.grid(row=optional_header_offset, column=1, padx=0, pady=(40,0), sticky='ew')
         
         run_area_offset = self.frame_container.grid_info()['row']+self.frame_container.grid_info()['rowspan']
@@ -535,13 +547,173 @@ class TvtApp(ctk.CTk, tk.Tk):
         self.tv_run_text.grid(row=run_area_offset, column=0, columnspan=1,
                               rowspan=4, padx=10, pady=40)
 
+     # Point Vis Tab
+        self.topview.add('Point Vis')
+        self.topview.tab('Point Vis').rowconfigure((0), weight=1)
+        self.topview.tab('Point Vis').columnconfigure((0), weight=1)
+        
+        def run_pvt():
+            self.pv_run_button.configure(image=None, text=None)
+            self.pv_run_button.update()
+            
+            if bool(self.output_directory_pv.tv_direct_entry.get()) == False:
+                default_output_dir = InputParameters.generate_dir(self.output_directory_pv.tv_direct_entry,self.processing_section_pv,self.input_directory_pv.tv_direct_entry)
+            else:
+                default_output_dir = f"{ftfy.fix_text(str(self.output_directory_pv.tv_direct_entry.get()))}/"
+
+            data_path = f"{ftfy.fix_text(str(self.input_directory_pv.tv_direct_entry.get()))}/"
+            
+            save_path = ftfy.fix_text(default_output_dir)
+            
+            meta_data_path = f"{default_output_dir}/pcd_output_summary.csv"
+            visualize_steps = bool(self.optional_section_pt.visualise_spinbox.get())
+            
+            
+            downsample_mesh = bool(self.processing_section_pv.downsampling_spinbox.get())
+            voxel_multiplier = float(self.processing_section_pv.voxel_multiplier.get(
+            )) if self.processing_section_pv.downsampling_spinbox.get() > 0 else 1.0
+            rotation_choice = self.processing_section_pv.rotation_entry.get()
+            if not bool(self.processing_section_pv.rotation_label.get()):
+                flip_mesh = False
+                auto_rotate = False
+            else:
+                if rotation_choice == 'AUTO':
+                    flip_mesh = False
+                    auto_rotate = True
+                else:
+                    flip_mesh = True
+                    auto_rotate = False
+                
+            update_resolution = bool(self.processing_section_pv.updateres_spinbox.get())
+            scale_multiplier = float(self.processing_section_pv.res_multiplier.get(
+            )) if self.processing_section_pv.updateres_spinbox.get() > 0 else 1.0
+            progress_text_pv = self.pv_run_text
+            array = bool(self.optional_section_pt.outarray_spinbox.get())
+            
+            if self.output_section_pv.colour_entry.get() == 'BOTH':
+                export_rgb = True
+                export_grey = True
+            elif self.output_section_pv.colour_entry.get() == 'RGB':
+                export_rgb = True
+                export_grey = False
+            else:
+                export_rgb = False
+                export_grey = True
+                
+            transparency = bool(self.output_section_pv.transparency_spinbox.get())
+            img_format = self.output_section_pv.img_ext_entry.get()
+            
+            clean_noise = bool(self.processing_section_pv.clean_spinbox.get())
+
+            files = []
+            for dp, dn, filenames in os.walk(data_path):
+                for file in filenames:
+                    if os.path.splitext(file)[1] in ['.las', '.laz', '.xyz','pcd']:
+                        files.append((' '.join(file.split('.')[0].split(' ')), os.path.join(
+                            dp, file), ''.join(dp.replace(data_path, save_path))))
+            
+            try:
+                pointvis.start_pv(
+                    data_path, save_path, meta_data_path, visualize_steps, downsample_mesh, voxel_multiplier, flip_mesh, update_resolution, scale_multiplier, progress_text_pv, array,
+                    files=files, export_rgb=export_rgb, export_grey=export_grey, img_type=img_format, transparency=transparency, clean_noise=clean_noise,auto_rotate=auto_rotate, dpi=900)
+                
+            except MemoryError as error:
+                topovis.log_exception(error, False)
+            except Exception as exception:
+                topovis.log_exception(exception, True)
+            except:
+                topovis.log_exception('An error occurred', True)
+                
+            self.output_directory_pv.tv_direct_entry.delete(0, END)
+            self.output_directory_pv.tv_direct_entry.update()
+
+            self.pv_run_button.configure(
+                image=play, text=None, command=run_tvt)
+            self.pv_run_button.update()
+
+            self.pv_run_text.configure(text='')
+            self.pv_run_text.update()
+            
+
+        self.frame_container_pv = ctk.CTkScrollableFrame(self.topview.tab('Point Vis'))
+        self.frame_container_pv.grid(row=0, column=0, columnspan=2, padx=15, pady=10, sticky='nsew')
+        self.frame_container_pv.columnconfigure((0), weight=1)
+        self.frame_container_pv.rowconfigure((0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18), weight=1)
+        
+
+        self.input_directory_pv = InputParameters(self.frame_container_pv,border_width=0)
+        self.input_directory_pv.mesh_direct.configure(text='Input Directory')
+        self.input_directory_pv.mesh_info_balloon.configure(message=point_info_txt)
+        self.input_directory_pv.grid(row=0, column=0, padx=20, pady=0, sticky='nsew')
+
+        
+        processing_header_offset_pv = self.input_directory_pv.grid_info()['row']+self.input_directory_pv.grid_info()['rowspan']
+        
+        self.processing_header_pv= ctk.CTkLabel(
+            self.frame_container_pv, text='Point Cloud Settings', justify='left', anchor='w', font=self.heading_font)
+        self.processing_header_pv.grid(
+            row=processing_header_offset_pv, column=0, padx=3, pady=(40, 0), sticky='ew')
+        
+        processing_sect_offset_pv = self.processing_header_pv.grid_info()['row']+self.processing_header_pv.grid_info()['rowspan']
+        self.processing_section_pv = ProcessingSettings(self.frame_container_pv, border_width=0)
+        self.processing_section_pv.grid(row=processing_sect_offset_pv, column=0, padx=20, pady=10, sticky='nsew')
         
         
-    def expand_menu(self,section,offset):
+        output_header_offset_pv = self.processing_section_pv.grid_info()['row']+self.processing_section_pv.grid_info()['rowspan']
+        
+        self.output_header_pv = ctk.CTkLabel(self.frame_container_pv, text='Output Settings', justify='left', anchor='w', font=self.heading_font)
+        self.output_header_pv.grid(row=output_header_offset_pv, column=0, padx=3, pady=(40, 0), sticky='ew')
+        
+        output_directory_offset_pv = self.output_header_pv.grid_info()['row']+self.output_header_pv.grid_info()['rowspan']
+        
+        
+        self.output_directory_pv = InputParameters(self.frame_container_pv,border_width=0)
+        self.output_directory_pv.mesh_direct.configure(text='Output Directory')
+        self.output_directory_pv.mesh_info_balloon.configure(message=out_info_txt)
+        self.output_directory_pv.grid(row=output_directory_offset_pv, column=0, padx=20, pady=0, sticky='nsew')
+        
+        self.generate_button_pv = ctk.CTkButton(self.output_directory_pv.tv_direct_entry, image=generate, bg_color=frame, text='', width=20, height=20)
+        
+        self.generate_button_pv.grid(row=0, column=1, padx=0, sticky='nsw')
+        
+        self.generate_button_pv.configure(command=lambda: InputParameters.generate_dir(self.output_directory_pv.tv_direct_entry, self.processing_section_pv, self.input_directory_pv.tv_direct_entry))
+        
+        self.generate_info_balloon_pv = CTkToolTip(
+            self.generate_button_pv, message='Automatically generate the output folder name based on you processing settings.', wraplength=250, text_color='whitesmoke', alpha=1, font=self.tooltip_font)
+        
+        output_sect_offset_pv = self.output_directory_pv.grid_info()['row']+self.output_directory_pv.grid_info()['rowspan']
+        self.output_section_pv = OutputSettings(self.frame_container_pv, border_width=0)
+        self.output_section_pv.grid(row=output_sect_offset_pv, column=0, padx=20, pady=10, sticky='ew')
+        
+        
+        optional_header_offset_pv = self.output_section_pv.grid_info()['row']+self.output_section_pv.grid_info()['rowspan']
+        self.optional_header_pv = ctk.CTkLabel(self.frame_container_pv, text='Optional Settings', justify='left', anchor='w', font=self.heading_font)
+        self.optional_header_pv.grid(row=optional_header_offset_pv, column=0, padx=3, pady=(40,0), sticky='ew')
+        
+        optional_sect_offset_pv = self.optional_header_pv.grid_info()['row']+self.optional_header_pv.grid_info()['rowspan']
+        self.optional_section_pt = OptionalSettings(self.frame_container_pv, hide_fill=True, border_width=0)
+        
+        self.expand_section_pt = ctk.CTkButton(self.frame_container_pv, image=expand_rot, text='', fg_color='transparent', command=lambda: self.expand_menu(self.optional_section_pt,optional_sect_offset_pv,self.expand_section_pt),width=20)
+        self.expand_section_pt.grid(row=optional_header_offset_pv, column=1, padx=0, pady=(40,0), sticky='ew')
+        
+        run_area_offset_pv = self.frame_container_pv.grid_info()['row']+self.frame_container_pv.grid_info()['rowspan']
+        self.pv_run_button = ctk.CTkButton(self.topview.tab('Point Vis'), image=play,  command=run_pvt,fg_color='transparent', text='', width=35, height=35)
+        self.pv_run_button.grid(row=run_area_offset, column=1, rowspan=2, padx=10, pady=40)
+
+        self.pv_run_text = ctk.CTkLabel(
+            self.topview.tab('Point Vis'), text='', font=self.menu_font, justify='center', wraplength=200)
+        self.pv_run_text.grid(row=run_area_offset_pv, column=0, columnspan=1,
+                              rowspan=4, padx=10, pady=40)
+
+        for button in self.topview._segmented_button._buttons_dict:
+            self.topview._segmented_button._buttons_dict[button].configure(border_width=0)
+        
+        
+    def expand_menu(self,section,offset,expand_section):
         if section.winfo_manager() != 'grid':
             section.grid(row=offset, column=0, padx=10, pady=10, sticky='ew')
-            self.expand_section.configure(image=expand)
-            self.expand_section.update()
+            expand_section.configure(image=expand)
+            expand_section.update()
             self.configure(scrollregion=self.bbox('all'))
             self.frame_container.update()
             self.frame_container._parent_canvas.yview_moveto(1.0)
@@ -549,8 +721,8 @@ class TvtApp(ctk.CTk, tk.Tk):
         else:
             self.configure(scrollregion=self.bbox('all'))
             section.grid_remove()
-            self.expand_section.configure(image=expand_rot)
-            self.expand_section.update()
+            expand_section.configure(image=expand_rot)
+            expand_section.update()
             self.frame_container._parent_canvas.yview_moveto(1.0)
 
 
