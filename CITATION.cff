@@ -7,7 +7,7 @@ title:  >-
   Swedish-Rock-Art-Research-Archives/tvt_distrib
 abstract: packaged version of TVT, a python-based app for visualising carvings in 3d meshes
 type: software
-license: MIT
+version: v2.1.0
 url: https://github.com/Swedish-Rock-Art-Research-Archives/tvt_distrib
 authors: 
   - family-names: Green
@@ -18,4 +18,8 @@ authors:
     given-names: Rich
   - family-names: Horn
     given-names: Christian
-date-released: 2025-04-29
+date-released: 2025-05-21
+identifiers: 
+  - type: doi
+    value: 10.5281/zenodo.15479454
+
