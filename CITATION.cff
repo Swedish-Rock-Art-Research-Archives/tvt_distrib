@@ -4,7 +4,7 @@ cff-version: 1.2.0
 message: >-
   If you use this software, please cite it using the metadata from this file.
 title:  >-
-  Topography Visualisation Toolbox
+  Topography Visualisation Toolbox (TVT)
 abstract: packaged version of TVT, a python-based app for visualising carvings in 3d meshes
 type: software
 version: v2.1.0
